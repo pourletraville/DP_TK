@@ -7,7 +7,10 @@ import calendar
 
 # --- Set Pandas Styler max_elements option to handle large DataFrames ---
 pd.set_option("styler.render.max_elements", 10_000_000)
-
+df_creel = pd.read_csv('CREEL3YRS-MOD.csv')
+df_arabic_quality = pd.read_csv('Creel_arabic_quality.csv')
+# And for the image:
+st.image('OWICON.png', width=150)
 # --- Configuration and File Paths ---
 # IMPORTANT: Update these paths to match your actual file locations.
 # Ensure these paths are accessible by the Streamlit app.
