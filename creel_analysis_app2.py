@@ -9,41 +9,36 @@ import calendar
 pd.set_option("styler.render.max_elements", 10_000_000)
 
 # --- Configuration and File Paths ---
-# IMPORTANT: Updated these paths to be relative to the script's directory.
-# This assumes your 'CREEL3YRS-MOD.csv' and 'Creel_arabic_quality.csv' files
-# are located in a 'data' subfolder next to your Python script,
-# and 'OWICON.png' is in an 'images' subfolder.
+# IMPORTANT: Updated paths to assume all files are in the SAME directory as the script.
+# This means your 'CREEL3YRS-MOD.csv', 'Creel_arabic_quality.csv', and 'OWICON.png'
+# should be directly alongside your 'your_script_name.py' in your GitHub repository.
 # Example structure:
 # your_app_folder/
 # ├── your_script.py
-# ├── data/
-# │   ├── CREEL3YRS-MOD.csv
-# │   └── Creel_arabic_quality.csv
-# └── images/
-#     └── OWICON.png
+# ├── CREEL3YRS-MOD.csv
+# ├── Creel_arabic_quality.csv
+# └── OWICON.png
 
-SCRIPT_DIR = os.path.dirname(__file__) # Get the directory of the current script
-
-FILE1_PATH = os.path.join(SCRIPT_DIR, "data", "CREEL3YRS-MOD.csv")
-FILE2_PATH = os.path.join(SCRIPT_DIR, "data", "Creel_arabic_quality.csv")
-HEADER_IMAGE_PATH = os.path.join(SCRIPT_DIR, "images", "OWICON.png")
+FILE1_PATH = "CREEL3YRS-MOD.csv"
+FILE2_PATH = "Creel_arabic_quality.csv"
+HEADER_IMAGE_PATH = "OWICON.png" # Assuming OWICON.png is also in the same directory
 
 # Initial loading for immediate use (e.g., for st.image before @st.cache_data)
 # These will be reloaded by the cached function later.
 # It's good practice to ensure these initial loads also use the corrected paths.
 try:
-    df_creel = pd.read_csv(FILE1_PATH)
-    df_arabic_quality = pd.read_csv(FILE2_PATH)
+    df_creel_initial = pd.read_csv(FILE1_PATH) # Renamed to avoid conflict with function's df_creel
+    df_arabic_quality_initial = pd.read_csv(FILE2_PATH) # Renamed
 except FileNotFoundError:
-    st.error(f"Initial file load failed. Make sure 'data/CREEL3YRS-MOD.csv' and 'data/Creel_arabic_quality.csv' exist.")
-    df_creel = pd.DataFrame() # Provide empty DFs to prevent errors
-    df_arabic_quality = pd.DataFrame()
+    st.error(f"Initial file load failed. Make sure '{FILE1_PATH}' and '{FILE2_PATH}' exist in the same directory as the script.")
+    df_creel_initial = pd.DataFrame() # Provide empty DFs to prevent errors
+    df_arabic_quality_initial = pd.DataFrame()
 
 # And for the image:
 try:
     st.image(HEADER_IMAGE_PATH, width=150)
 except FileNotFoundError:
-    st.warning(f"Header image not found at {HEADER_IMAGE_PATH}. Please ensure 'images/OWICON.png' exists.")
+    st.warning(f"Header image not found at {HEADER_IMAGE_PATH}. Please ensure '{HEADER_IMAGE_PATH}' exists in the same directory as the script.")
 
 
 # Define the exact column names for CREEL3YRS-MOD.csv
