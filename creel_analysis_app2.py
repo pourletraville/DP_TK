@@ -7,17 +7,44 @@ import calendar
 
 # --- Set Pandas Styler max_elements option to handle large DataFrames ---
 pd.set_option("styler.render.max_elements", 10_000_000)
-df_creel = pd.read_csv('CREEL3YRS-MOD.csv')
-df_arabic_quality = pd.read_csv('Creel_arabic_quality.csv')
-# And for the image:
-st.image('OWICON.png', width=150)
+
 # --- Configuration and File Paths ---
-# IMPORTANT: Update these paths to match your actual file locations.
-# Ensure these paths are accessible by the Streamlit app.
-# For example, if running locally, use absolute paths or paths relative to the script's directory.
-FILE1_PATH = r"CREEL3YRS-MOD.csv"
-FILE2_PATH = r"Creel_arabic_quality.csv"
-HEADER_IMAGE_PATH = r"C:\Users\t_helmy\OWICON.png"
+# IMPORTANT: Updated these paths to be relative to the script's directory.
+# This assumes your 'CREEL3YRS-MOD.csv' and 'Creel_arabic_quality.csv' files
+# are located in a 'data' subfolder next to your Python script,
+# and 'OWICON.png' is in an 'images' subfolder.
+# Example structure:
+# your_app_folder/
+# ├── your_script.py
+# ├── data/
+# │   ├── CREEL3YRS-MOD.csv
+# │   └── Creel_arabic_quality.csv
+# └── images/
+#     └── OWICON.png
+
+SCRIPT_DIR = os.path.dirname(__file__) # Get the directory of the current script
+
+FILE1_PATH = os.path.join(SCRIPT_DIR, "data", "CREEL3YRS-MOD.csv")
+FILE2_PATH = os.path.join(SCRIPT_DIR, "data", "Creel_arabic_quality.csv")
+HEADER_IMAGE_PATH = os.path.join(SCRIPT_DIR, "images", "OWICON.png")
+
+# Initial loading for immediate use (e.g., for st.image before @st.cache_data)
+# These will be reloaded by the cached function later.
+# It's good practice to ensure these initial loads also use the corrected paths.
+try:
+    df_creel = pd.read_csv(FILE1_PATH)
+    df_arabic_quality = pd.read_csv(FILE2_PATH)
+except FileNotFoundError:
+    st.error(f"Initial file load failed. Make sure 'data/CREEL3YRS-MOD.csv' and 'data/Creel_arabic_quality.csv' exist.")
+    df_creel = pd.DataFrame() # Provide empty DFs to prevent errors
+    df_arabic_quality = pd.DataFrame()
+
+# And for the image:
+try:
+    st.image(HEADER_IMAGE_PATH, width=150)
+except FileNotFoundError:
+    st.warning(f"Header image not found at {HEADER_IMAGE_PATH}. Please ensure 'images/OWICON.png' exists.")
+
 
 # Define the exact column names for CREEL3YRS-MOD.csv
 CREEL_COLUMNS = ['Sales Organizations Name', 'Billing Year', 'Region', 'Customer', 'Creel', 'Value EGP', 'Value USD', 'Quantity SQM']
@@ -587,406 +614,180 @@ def render_creel_rationalization(df):
                         formatted_consolidated_summary = consolidated_summary_display.copy()
                         formatted_consolidated_summary['Total Quantity SQM (2025)'] = formatted_consolidated_summary['Total Quantity SQM (2025)'].apply(lambda x: format_value(x, 'Quantity SQM'))
                         formatted_consolidated_summary['Percentage of Total Quantity (2025)'] = formatted_consolidated_summary['Percentage of Total Quantity (2025)'].apply(lambda x: format_value(x, 'Percentage'))
-                        
+                        formatted_consolidated_summary['Cumulative Percentage (2025)'] = formatted_consolidated_summary['Cumulative Percentage (2025)'].apply(lambda x: format_value(x, 'Percentage'))
                         for year_col in [f'Qty SQM ({y})' for y in [2023, 2024, 2025]]:
                             formatted_consolidated_summary[year_col] = formatted_consolidated_summary[year_col].apply(lambda x: format_value(x, 'Quantity SQM'))
-
-                        MAX_CELLS_FOR_STYLING_SUMMARY = 500_000
-                        if formatted_consolidated_summary.size > MAX_CELLS_FOR_STYLING_SUMMARY:
-                            st.warning(f"Summary table is very large ({formatted_consolidated_summary.size:,} cells). Displaying unstyled data. Adjust threshold for a smaller list.")
-                            st.dataframe(formatted_consolidated_summary, use_container_width=True, hide_index=True)
-                        else:
-                            st.dataframe(
-                                formatted_consolidated_summary.style.apply(highlight_multi_customer_in_summary, axis=1),
-                                use_container_width=True,
-                                hide_index=True
-                            )
-                            st.info(":orange[**Orange rows**]: Creels sold to multiple customers (since 2023).")
-
+                        
+                        st.dataframe(
+                            formatted_consolidated_summary.style.apply(highlight_multi_customer_in_summary, axis=1),
+                            use_container_width=True
+                        )
                         st.markdown("---")
-                        st.subheader("Summary of Identified Tail Creels")
-
-                        total_creels_shown = consolidated_summary_display.shape[0]
-                        total_percentage_of_2025_sales = creels_for_rationalization_summary['Percentage of Total Quantity (2025)'].sum()
-                        creels_zero_sales_2025_count = consolidated_summary_display[
-                            consolidated_summary_display['Qty SQM (2025)'] == 0
-                        ].shape[0]
-
-                        st.markdown(f"- **Total Tail Creels**: {total_creels_shown:,}")
-                        st.markdown(f"- **Total 2025 Sales Percentage (Quantity SQM)**: {total_percentage_of_2025_sales:,.2f}%")
-                        st.markdown(f"- **Tail Creels with Zero Sales in 2025**: {creels_zero_sales_2025_count:,}")
-
+                        st.info("💡 Rows highlighted in orange indicate creels that had sales to more than one customer in at least one of the years (2023, 2024, or 2025) within the selected sector, suggesting they might still have some market relevance despite low overall contribution.")
                     else:
-                        st.info(f"No Creels meet the {tail_threshold_percentage:.1f}% cumulative tail criteria for the **{business_sector}** sector in 2025.")
+                        st.success(f"No creels found below the {tail_threshold_percentage:.1f}% cumulative quantity threshold for 2025 in the {business_sector} sector. All creels are contributing significantly!")
             else:
-                st.info(f"No sales data for Creels in 2025 for the **{business_sector}** sector for tail analysis.")
+                st.info("No sales data available to perform tail analysis for 2025 in the selected sector.")
 
     with tab2:
-        render_suggested_delist_candidates(df, business_sector) # Pass the full df and the selected sector
+        # Pass the full DataFrame to the delist candidates function,
+        # as it handles its own filtering based on the selected business sector.
+        render_suggested_delist_candidates(df, business_sector)
 
 def render_sales_forecasting(df):
-    """
-    Renders the sales forecasting page.
-    Forecasts sales for a target period based on user selections
-    and predefined monthly distribution rules.
-    """
-    back_to_main_dashboard_button() # ADDED: Back to main dashboard button
+    """Renders the sales forecasting page."""
+    back_to_main_dashboard_button()
     st.header("Sales Forecasting")
-    
-    col_inputs1, col_inputs2 = st.columns(2)
+    st.info("This tool provides a sales forecast based on historical data and user-defined annual growth rates.")
 
-    with col_inputs1:
-        available_years = sorted(df['Billing Year'].dropna().astype(int).unique(), reverse=True)
-        
-        selected_base_years = st.multiselect(
-            "1. Select Base Year(s) for Forecasting:",
-            options=available_years,
-            default=available_years[0] if available_years else [],
-            help=" Will be used as the base for the forecast."
+    latest_year_in_data = df['Billing Year'].dropna().astype(int).max()
+    st.subheader(f"Forecast from Year {latest_year_in_data + 1}")
+
+    col_forecast1, col_forecast2 = st.columns(2)
+
+    with col_forecast1:
+        forecast_years = st.slider(
+            "Number of Years to Forecast",
+            min_value=1, max_value=5, value=1, step=1,
+            help="Select how many years into the future you want to forecast."
         )
 
-        if not selected_base_years:
-            st.warning("Please select at least one base year to generate a forecast.")
-            return
-
-        # Filtering base data for selected years
-        df_base_years = df[df['Billing Year'].isin(selected_base_years)].copy()
-
-        if df_base_years.empty:
-            st.warning(f"No sales data for the selected base year(s) {selected_base_years}. Cannot perform forecasting.")
-            return
-            
-        # User selection for Business Sector (Filter 2)
-        selected_sector = st.selectbox(
-            "2. Filter by Business Sector:",
-            ["All", "Egypt", "International"],
-            help="Filter business sector before generating the forecast."
+    with col_forecast2:
+        annual_growth_rate_egp = st.number_input(
+            "Annual Growth Rate for EGP Sales (%)",
+            min_value=-50.0, max_value=50.0, value=5.0, step=0.1, format="%.1f",
+            help="Expected annual growth rate for EGP sales."
+        )
+        annual_growth_rate_sqm = st.number_input(
+            "Annual Growth Rate for Quantity (SQM) Sales (%)",
+            min_value=-50.0, max_value=50.0, value=3.0, step=0.1, format="%.1f",
+            help="Expected annual growth rate for Quantity (SQM) sales."
         )
 
-    with col_inputs2:
-        num_months_to_forecast = st.slider(
-            "4. Number of Months to Forecast (from next month):",
-            min_value=1,
-            max_value=24, # Max 24 months from current
-            value=6, # Default to 6 months
-            step=1,
-            help="starting from the next month."
-        )
-        
-        # Dynamic filter options based on sector (Filter 3 & 4)
-        selected_regions = []
-        selected_customers = []
+    growth_factor_egp = 1 + (annual_growth_rate_egp / 100)
+    growth_factor_sqm = 1 + (annual_growth_rate_sqm / 100)
 
-        if selected_sector == "All":
-            # Populate with all available regions/customers from df_base_years
-            all_regions = sorted(df_base_years['Region'].dropna().unique().tolist())
-            all_regions = [r for r in all_regions if r != 'nan']
-            
-            selected_regions = st.multiselect("3. Filter by Specific Region(s) (Optional):", options=["All"] + all_regions, default=["All"])
-            
-            # For "All" sector, customer list depends on selected regions
-            df_for_customer_options = df_base_years.copy()
-            if "All" not in selected_regions and selected_regions:
-                df_for_customer_options = df_for_customer_options[df_for_customer_options['Region'].isin(selected_regions)]
-            
-            customer_options_for_multiselect = sorted(df_for_customer_options['Customer'].dropna().unique().tolist())
-            customer_options_for_multiselect = [c for c in customer_options_for_multiselect if c != 'nan']
+    # Calculate current year's (latest_year_in_data) total sales by sector
+    df_current_year = df[df['Billing Year'] == latest_year_in_data].copy()
 
-            selected_customers = st.multiselect("3. Filter by Specific Customer(s) (Optional):", options=["All"] + customer_options_for_multiselect, default=["All"])
-            st.info("Apply Needed Filters.")
+    current_year_sales_by_sector = df_current_year.groupby('Sector').agg(
+        Total_Value_EGP=('Value EGP', 'sum'),
+        Total_Quantity_SQM=('Quantity SQM', 'sum')
+    ).reset_index()
 
-        elif selected_sector == "Egypt":
-            egypt_regions = sorted(df_base_years[df_base_years['Is_Egypt_Sector'] == True]['Region'].dropna().unique().tolist())
-            egypt_regions = [r for r in egypt_regions if r != 'nan']
-            
-            selected_regions = st.multiselect("3. Filter by Specific Region(s) (Egypt Sector):", options=["All"] + egypt_regions, default=["All"])
-
-            # Filter customers based on Egypt sector AND selected regions
-            df_for_customer_options = df_base_years[df_base_years['Is_Egypt_Sector'] == True].copy()
-            if "All" not in selected_regions and selected_regions:
-                df_for_customer_options = df_for_customer_options[df_for_customer_options['Region'].isin(selected_regions)]
-
-            egypt_customers = sorted(df_for_customer_options['Customer'].dropna().unique().tolist())
-            egypt_customers = [c for c in egypt_customers if c != 'nan']
-
-            selected_customers = st.multiselect("3. Filter by Specific Customer(s) (Egypt Sector):", options=["All"] + egypt_customers, default=["All"])
-            st.info("Filters for the 'Egypt' sector are applied. Customer list dynamically updates based on selected regions.")
-            
-        elif selected_sector == "International":
-            international_regions = sorted(df_base_years[df_base_years['Is_Egypt_Sector'] == False]['Region'].dropna().unique().tolist())
-            international_regions = [r for r in international_regions if r != 'nan']
-            
-            selected_regions = st.multiselect("3. Filter by Specific Region(s) (International Sector):", options=["All"] + international_regions, default=["All"])
-
-            # Filter customers based on International sector AND selected regions
-            df_for_customer_options = df_base_years[df_base_years['Is_Egypt_Sector'] == False].copy()
-            if "All" not in selected_regions and selected_regions:
-                df_for_customer_options = df_for_customer_options[df_for_customer_options['Region'].isin(selected_regions)]
-
-            international_customers = sorted(df_for_customer_options['Customer'].dropna().unique().tolist())
-            international_customers = [c for c in international_customers if c != 'nan']
-
-            selected_customers = st.multiselect("3. Filter by Specific Customer(s) (International Sector):", options=["All"] + international_customers, default=["All"])
-            st.info("Filters for the 'International' sector are applied. Customer list dynamically updates based on selected regions.")
-    
-    # --- Apply Filters to Base Data ---
-    df_filtered_forecast = df_base_years.copy()
-
-    if selected_sector == "Egypt":
-        df_filtered_forecast = df_filtered_forecast[df_filtered_forecast['Is_Egypt_Sector'] == True]
-    elif selected_sector == "International":
-        df_filtered_forecast = df_filtered_forecast[df_filtered_forecast['Is_Egypt_Sector'] == False]
-
-    if "All" not in selected_regions and selected_regions:
-        df_filtered_forecast = df_filtered_forecast[df_filtered_forecast['Region'].isin(selected_regions)]
-
-    if "All" not in selected_customers and selected_customers:
-        df_filtered_forecast = df_filtered_forecast[df_filtered_forecast['Customer'].isin(selected_customers)]
-
-    if df_filtered_forecast.empty:
-        st.warning("No data matches the selected filters for forecasting.")
+    if current_year_sales_by_sector.empty:
+        st.warning(f"No sales data found for the latest year ({latest_year_in_data}). Cannot generate a forecast.")
         return
-    
-    # --- Core Forecasting Logic ---
-    total_quantity_sqm_base = df_filtered_forecast['Quantity SQM'].sum()
-    st.subheader(f"Base Quantity (Selected Years & Filters): {format_value(total_quantity_sqm_base, 'Quantity SQM')}")
-
-    # Determine monthly percentages based on selected sector
-    monthly_percentages_to_use = {}
-    if selected_sector == "Egypt":
-        monthly_percentages_to_use = EGYPT_MONTHLY_PERCENTAGES
-    elif selected_sector == "International":
-        monthly_percentages_to_use = INTERNATIONAL_MONTHLY_PERCENTAGES
-    else: # If 'All' or a mix, default to Egypt's for now, or could average/sum
-        st.warning("For 'All' sectors, monthly distribution defaults to Egypt's percentages. Consider filtering by specific sector for more accurate distribution.")
-        monthly_percentages_to_use = EGYPT_MONTHLY_PERCENTAGES # Or provide a mixed/average set
 
     st.markdown("---")
-    st.subheader("Forecast Parameters")
-    col_growth1, col_growth2 = st.columns(2)
-    with col_growth1:
-        st.write("Current Exchange Rate (for USD conversion):")
-        # Ensure a unique key for the exchange rate input in this section
-        forecast_exchange_rate = st.number_input(
-            "1 USD = X EGP",
-            min_value=1.0, value=30.0, step=0.1, format="%.2f", key="forecast_exchange_rate"
-        )
-    with col_growth2:
-        growth_rate = st.slider(
-            "Annual Growth Rate for Forecast (%):",
-            min_value=-20.0, max_value=50.0, value=10.0, step=0.5, format="%.1f%%"
-        ) / 100
+    st.subheader("Forecasted Sales by Sector")
 
-    # Get current month and year to determine starting point for forecast
-    current_date = datetime.date.today()
-    start_month = current_date.month + 1 # Forecast starts from next month
-    start_year = current_date.year
-    
-    if start_month > 12: # If current month is December, forecast starts next year January
-        start_month = 1
-        start_year += 1
+    forecast_results = []
 
-    forecast_data = []
-    
-    # Initialize forecasted annual total for the first forecast year
-    latest_base_year = df_base_years['Billing Year'].max()
-    current_forecast_year_annual_sqm = total_quantity_sqm_base
-
-    # If the forecast starts in a year beyond the latest base year, apply initial growth
-    if start_year > latest_base_year:
-        years_diff = start_year - latest_base_year
-        current_forecast_year_annual_sqm *= ((1 + growth_rate) ** years_diff)
-
-
-    for i in range(num_months_to_forecast):
-        month = (start_month + i - 1) % 12 + 1
-        year = start_year + (start_month + i - 1) // 12
+    for year_offset in range(1, forecast_years + 1):
+        forecast_year = latest_year_in_data + year_offset
         
-        month_name = calendar.month_name[month]
+        for index, row in current_year_sales_by_sector.iterrows():
+            sector = row['Sector']
+            base_egp = row['Total_Value_EGP']
+            base_sqm = row['Total_Quantity_SQM']
+
+            # Apply growth cumulatively from the latest_year_in_data
+            forecasted_egp = base_egp * (growth_factor_egp ** year_offset)
+            forecasted_sqm = base_sqm * (growth_factor_sqm ** year_offset)
+
+            # Apply monthly percentages
+            monthly_percentages = EGYPT_MONTHLY_PERCENTAGES if sector == 'Egypt' else INTERNATIONAL_MONTHLY_PERCENTAGES
+            
+            for month_num, percentage in monthly_percentages.items():
+                month_name = calendar.month_abbr[month_num]
+                forecast_results.append({
+                    'Year': forecast_year,
+                    'Month': month_name,
+                    'Sector': sector,
+                    'Forecasted Value EGP': forecasted_egp * percentage,
+                    'Forecasted Quantity SQM': forecasted_sqm * percentage
+                })
+
+    if forecast_results:
+        df_forecast = pd.DataFrame(forecast_results)
         
-        # If the year changes during the forecast period, apply the annual growth
-        if i > 0 and month == 1: # If it's January of a new year in the forecast
-            current_forecast_year_annual_sqm *= (1 + growth_rate)
+        # Aggregate by year and sector for summary table
+        df_forecast_summary_by_year_sector = df_forecast.groupby(['Year', 'Sector']).agg(
+            Total_Forecasted_Value_EGP=('Forecasted Value EGP', 'sum'),
+            Total_Forecasted_Quantity_SQM=('Forecasted Quantity SQM', 'sum')
+        ).reset_index()
 
-        # Calculate month's share of the current forecast year's total
-        monthly_percentage = monthly_percentages_to_use.get(month, 0)
-        
-        forecasted_monthly_sqm = current_forecast_year_annual_sqm * monthly_percentage
-        
-        # Calculate EGP and USD based on the average value per SQM from the base data
-        avg_egp_per_sqm = df_filtered_forecast['Value EGP'].sum() / total_quantity_sqm_base if total_quantity_sqm_base > 0 else 0
-        avg_usd_per_sqm = df_filtered_forecast['Value USD'].sum() / total_quantity_sqm_base if total_quantity_sqm_base > 0 else 0
+        # Format for display
+        df_forecast_summary_by_year_sector['Total_Forecasted_Value_EGP'] = \
+            df_forecast_summary_by_year_sector['Total_Forecasted_Value_EGP'].apply(lambda x: format_value(x, 'Value EGP'))
+        df_forecast_summary_by_year_sector['Total_Forecasted_Quantity_SQM'] = \
+            df_forecast_summary_by_year_sector['Total_Forecasted_Quantity_SQM'].apply(lambda x: format_value(x, 'Quantity SQM'))
 
-        forecasted_monthly_egp = forecasted_monthly_sqm * avg_egp_per_sqm
-        
-        # If USD data is largely missing in base, use EGP conversion for USD forecast
-        if avg_usd_per_sqm < 0.001:
-            forecasted_monthly_usd = forecasted_monthly_egp / forecast_exchange_rate if forecast_exchange_rate > 0 else 0
-        else:
-            forecasted_monthly_usd = forecasted_monthly_sqm * avg_usd_per_sqm
+        st.dataframe(df_forecast_summary_by_year_sector, use_container_width=True, hide_index=True)
 
+        st.markdown("---")
+        st.subheader("Monthly Breakdown of Forecasted Sales")
 
-        forecast_data.append({
-            "Year": year,
-            "Month": month_name,
-            "Forecasted Quantity (SQM)": forecasted_monthly_sqm,
-            "Forecasted Value (EGP)": forecasted_monthly_egp,
-            "Forecasted Value (USD)": forecasted_monthly_usd
-        })
+        # Aggregate by month and sector for monthly table
+        df_forecast_monthly_summary = df_forecast.groupby(['Year', 'Month', 'Sector']).agg(
+            Monthly_Forecasted_Value_EGP=('Forecasted Value EGP', 'sum'),
+            Monthly_Forecasted_Quantity_SQM=('Forecasted Quantity SQM', 'sum')
+        ).reset_index()
 
-    df_forecast = pd.DataFrame(forecast_data)
+        # Order months correctly
+        month_order = [calendar.month_abbr[i] for i in range(1, 13)]
+        df_forecast_monthly_summary['Month'] = pd.Categorical(df_forecast_monthly_summary['Month'], categories=month_order, ordered=True)
+        df_forecast_monthly_summary = df_forecast_monthly_summary.sort_values(by=['Year', 'Month', 'Sector']).reset_index(drop=True)
 
-    st.markdown("---")
-    st.subheader("Monthly Forecast Details")
-    
-    # --- Apply 1-decimal point formatting to the DataFrame columns ---
-    st.dataframe(df_forecast, use_container_width=True, hide_index=True,
-        column_config={
-            "Forecasted Quantity (SQM)": st.column_config.NumberColumn(
-                "Forecasted Quantity (SQM)", format="%.1f"
-            ),
-            "Forecasted Value (EGP)": st.column_config.NumberColumn(
-                "Forecasted Value (EGP)", format="EGP %.1f"
-            ),
-            "Forecasted Value (USD)": st.column_config.NumberColumn(
-                "Forecasted Value (USD)", format="USD %.1f"
-            ),
-        }
-    )
+        # Format for display
+        df_forecast_monthly_summary['Monthly_Forecasted_Value_EGP'] = \
+            df_forecast_monthly_summary['Monthly_Forecasted_Value_EGP'].apply(lambda x: format_value(x, 'Value EGP'))
+        df_forecast_monthly_summary['Monthly_Forecasted_Quantity_SQM'] = \
+            df_forecast_monthly_summary['Monthly_Forecasted_Quantity_SQM'].apply(lambda x: format_value(x, 'Quantity SQM'))
 
-    st.subheader("Forecast Visualizations")
+        st.dataframe(df_forecast_monthly_summary, use_container_width=True, hide_index=True)
 
-    if not df_forecast.empty:
-        # Plotly chart for forecasted quantity
-        fig_sqm = px.bar(df_forecast,
-                         x="Month",
-                         y="Forecasted Quantity (SQM)",
-                         color="Year",
-                         title="Monthly Forecasted Quantity (SQM)",
-                         labels={"Forecasted Quantity (SQM)": "Quantity (SQM)"},
-                         barmode='group') # Group bars by month for different years
-        st.plotly_chart(fig_sqm, use_container_width=True)
+        st.markdown("---")
+        st.subheader("Forecasted Sales Trends")
 
-        # Plotly chart for forecasted value (EGP)
-        fig_egp = px.bar(df_forecast,
-                         x="Month",
-                         y="Forecasted Value (EGP)",
-                         color="Year",
-                         title="Monthly Forecasted Value (EGP)",
-                         labels={"Forecasted Value (EGP)": "Value (EGP)"},
-                         barmode='group')
+        # Plotting yearly trends
+        df_yearly_plot = df_forecast.groupby(['Year', 'Sector']).agg(
+            Total_Value_EGP=('Forecasted Value EGP', 'sum'),
+            Total_Quantity_SQM=('Forecasted Quantity SQM', 'sum')
+        ).reset_index()
+
+        fig_egp = px.line(df_yearly_plot, x='Year', y='Total_Value_EGP', color='Sector',
+                          title='Forecasted Total Value (EGP) by Year and Sector',
+                          labels={'Total_Value_EGP': 'Total Value (EGP)', 'Year': 'Year'},
+                          markers=True)
+        fig_egp.update_layout(xaxis=dict(tickmode='linear'))
         st.plotly_chart(fig_egp, use_container_width=True)
 
-        # Plotly chart for forecasted value (USD)
-        fig_usd = px.bar(df_forecast,
-                         x="Month",
-                         y="Forecasted Value (USD)",
-                         color="Year",
-                         title="Monthly Forecasted Value (USD)",
-                         labels={"Forecasted Value (USD)": "Value (USD)"},
-                         barmode='group')
-        st.plotly_chart(fig_usd, use_container_width=True)
+        fig_sqm = px.line(df_yearly_plot, x='Year', y='Total_Quantity_SQM', color='Sector',
+                          title='Forecasted Total Quantity (SQM) by Year and Sector',
+                          labels={'Total_Quantity_SQM': 'Total Quantity (SQM)', 'Year': 'Year'},
+                          markers=True)
+        fig_sqm.update_layout(xaxis=dict(tickmode='linear'))
+        st.plotly_chart(fig_sqm, use_container_width=True)
+
     else:
-        st.info("No forecast data generated. Adjust your selections.")
+        st.warning("No forecast could be generated. Please check your input data and parameters.")
 
 
 # --- Main Application Logic ---
 def main():
-    st.set_page_config(
-        page_title="Demand Planning Dashboard",
-        page_icon=":chart_with_upwards_trend:",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
+    st.set_page_config(layout="wide", page_title="Demand Planning Dashboard")
 
-    # Custom CSS for a more appealing sidebar and general look
-    st.markdown("""
-        <style>
-        .stApp {
-            background-color: #f0f2f6; /* Light gray background */
-        }
-        .css-vk32pt { /* Targets the main content block */
-            padding-top: 1rem;
-            padding-right: 1rem;
-            padding-left: 1rem;
-            padding-bottom: 1rem;
-        }
-        .stSidebar {
-            background-color: #e0e6ed; /* Slightly darker gray for sidebar */
-            padding-top: 2rem;
-        }
-        .stButton>button {
-            background-color: #4CAF50; /* Green */
-            color: white;
-            padding: 10px 20px;
-            border-radius: 8px;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-            transition: all 0.3s ease;
-        }
-        .stButton>button:hover {
-            background-color: #45a049;
-            transform: translateY(-2px);
-        }
-        .stButton>button:active {
-            background-color: #3e8e41;
-            transform: translateY(0);
-        }
-        h1, h2, h3, h4, h5, h6 {
-            color: #2c3e50; /* Darker text for headers */
-        }
-        .stMetric {
-            background-color: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-        }
-        .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
-            font-size: 1.2rem;
-        }
-        /* Style for containers with border=True */
-        .st-emotion-cache-1jm6gsa { /* Adjust this class if Streamlit's internal class names change */
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            background-color: #ffffff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-    # Initialize session state for page navigation
     if 'current_page' not in st.session_state:
         st.session_state.current_page = "Dashboard Overview"
-
-    # Display header image
-    if os.path.exists(HEADER_IMAGE_PATH):
-        # Use use_container_width instead of use_column_width to remove deprecation warning
-        st.sidebar.image(HEADER_IMAGE_PATH, use_container_width=True) 
-    else:
-        st.sidebar.warning(f"Header image not found at {HEADER_IMAGE_PATH}")
-
-    st.sidebar.title("Navigation")
-    
-    # Navigation buttons in the sidebar
-    if st.sidebar.button("Dashboard Overview", key="sidebar_dashboard_overview"):
-        st.session_state.current_page = "Dashboard Overview"
-    if st.sidebar.button("Sales Performance", key="sidebar_sales_performance"):
-        st.session_state.current_page = "Sales Performance"
-    if st.sidebar.button("Creel Rationalization", key="sidebar_creel_rationalization"):
-        st.session_state.current_page = "Creel Rationalization"
-    if st.sidebar.button("Sales Forecasting", key="sidebar_sales_forecasting"):
-        st.session_state.current_page = "Sales Forecasting"
 
     df_main = load_and_preprocess_data()
 
     if df_main.empty:
-        st.error("Cannot load or process data. Please check file paths and data integrity.")
+        st.error("Data could not be loaded. Please check the file paths and data integrity.")
         return
 
-    # Render selected page
     if st.session_state.current_page == "Dashboard Overview":
         render_dashboard_overview(df_main)
     elif st.session_state.current_page == "Sales Performance":
