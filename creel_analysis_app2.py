@@ -12,8 +12,8 @@ pd.set_option("styler.render.max_elements", 10_000_000)
 # IMPORTANT: Update these paths to match your actual file locations.
 # Ensure these paths are accessible by the Streamlit app.
 # For example, if running locally, use absolute paths or paths relative to the script's directory.
-FILE1_PATH = r"C:\Users\t_helmy\Documents\CDE CYCLE PREST\CDE-2025\JUNE\CREEL STUDY\CREEL3YRS-MOD.csv"
-FILE2_PATH = r"C:\Users\t_helmy\Documents\CDE CYCLE PREST\CDE-2025\JUNE\CREEL STUDY\Creel_arabic_quality.csv"
+FILE1_PATH = r"CREEL3YRS-MOD.csv"
+FILE2_PATH = r"Creel_arabic_quality.csv"
 HEADER_IMAGE_PATH = r"C:\Users\t_helmy\OWICON.png"
 
 # Define the exact column names for CREEL3YRS-MOD.csv
